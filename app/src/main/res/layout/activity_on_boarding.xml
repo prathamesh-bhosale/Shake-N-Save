@@ -6,7 +6,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context=".OnBoardingActivity">
 
-    <androidx.viewpager.widget.ViewPager
+    <androidx.viewpager2.widget.ViewPager2
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:id="@+id/pager" />
@@ -43,14 +43,13 @@
             android:textSize="30sp" />
     </LinearLayout>
 
-    <com.ogaclejapan.smarttablayout.SmartTabLayout
+    <com.google.android.material.tabs.TabLayout
         android:id="@+id/indicator"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_above="@+id/navigation"
-        android:layout_marginBottom="20dp"
-        android:layout_centerHorizontal="true"
-        app:stl_dividerThickness="0dp"
-        app:stl_indicatorColor="@color/darkBlue" />
+        app:tabBackground="@drawable/tab_selector"
+        app:tabGravity="center"
+        app:tabIndicatorHeight="0dp"/>
 
 </RelativeLayout>
