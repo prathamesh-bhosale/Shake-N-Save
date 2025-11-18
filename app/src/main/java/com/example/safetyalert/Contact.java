@@ -3,27 +3,28 @@ package com.example.safetyalert;
 public class Contact {
 
     private String name;
-    private String contact;
-    public Contact(){}
-    public Contact(String name,String contact) {
-        name=this.name;
-        contact=this.contact;
+    private String phonenumber;
+
+    public Contact() {}
+
+    public Contact(String name, String phonenumber) {
+        this.name = name;
+        this.phonenumber = phonenumber;
     }
 
-    public String getName()
-    {
+    public String getName() {
         return name;
     }
-    public void setName(String name)
-    {
+
+    public void setName(String name) {
         this.name = name;
     }
-    public String getContact()
-    {
-        return contact;
+
+    public String getPhonenumber() {
+        return phonenumber;
     }
-    public void setContact(String contact)
-    {
-        this.contact = contact;
+
+    public void setPhonenumber(String phonenumber) {
+        this.phonenumber = phonenumber;
     }
 }

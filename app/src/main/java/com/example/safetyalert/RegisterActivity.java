@@ -1,19 +1,14 @@
 package com.example.safetyalert;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.AppCompatButton;
-
 import android.content.Intent;
 import android.os.Bundle;
-import android.view.View;
-import android.widget.LinearLayout;
 import android.widget.Toast;
 
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.HashMap;
@@ -21,64 +16,48 @@ import java.util.Map;
 
 public class RegisterActivity extends AppCompatActivity {
 
-    TextInputEditText name,age,phonenumber;
-    AppCompatButton register;
-    private FirebaseFirestore db;
-    LinearLayout goToLogin;
-    Map<String, Object> usermap = new HashMap<>();
+    private ActivityResultLauncher<Intent> loginLauncher;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
 
-        name=findViewById(R.id.entername);
-        age=findViewById(R.id.enterage);
-        phonenumber=findViewById(R.id.enterphonenumber);
-        register=findViewById(R.id.registerbtn);
-        db = FirebaseFirestore.getInstance();
-        goToLogin=findViewById(R.id.gotoLogin);
-        goToLogin.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                startActivity(new Intent(RegisterActivity.this,LoginScreen.class));
-                RegisterActivity.this.finish();
-            }
-        });
-        register.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                String nam=name.getText().toString();
-                String phone=phonenumber.getText().toString();
-                String agge=age.getText().toString();
-
-                usermap.put("age", agge);
-                usermap.put("gender", "male");
-                usermap.put("name", nam);
-                usermap.put("phonenumber", phone);
-
-                db.collection("users").document(phone).get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
-                    @Override
-                    public void onComplete(@NonNull Task<DocumentSnapshot> task) {
-                        DocumentSnapshot documentSnapshot = task.getResult();
-
-                        if(!documentSnapshot.exists()) {
-                            db.collection("users").document(phone).set(usermap).addOnCompleteListener(new OnCompleteListener<Void>() {
-                                @Override
-                                public void onComplete(@NonNull Task<Void> task) {
-                                    startActivity(new Intent(RegisterActivity.this, LoginScreen.class));
-                                    Toast.makeText(RegisterActivity.this,"Registration Successfull",Toast.LENGTH_SHORT).show();
-                                }
-                            });
-                        }else{
-                            Toast.makeText(RegisterActivity.this,"This phone number is already taken"+phone,Toast.LENGTH_SHORT).show();
-                        }
-
-                    }
+        loginLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    // This is where you would handle the result from the LoginScreen, if any.
+                    // In this case, we just finish the RegisterActivity.
+                    finish();
                 });
 
-            }
+        findViewById(R.id.registerbtn).setOnClickListener(v -> {
+            String name = ((TextInputEditText) findViewById(R.id.entername)).getText().toString();
+            String phone = ((TextInputEditText) findViewById(R.id.enterphonenumber)).getText().toString();
+            String age = ((TextInputEditText) findViewById(R.id.enterage)).getText().toString();
+
+            Map<String, Object> usermap = new HashMap<>();
+            usermap.put("age", age);
+            usermap.put("gender", "male");
+            usermap.put("name", name);
+            usermap.put("phonenumber", phone);
+
+            FirebaseFirestore.getInstance().collection("users").document(phone).get()
+                    .addOnCompleteListener(task -> {
+                        if (task.isSuccessful() && !task.getResult().exists()) {
+                            FirebaseFirestore.getInstance().collection("users").document(phone).set(usermap)
+                                    .addOnCompleteListener(task1 -> {
+                                        Toast.makeText(this, "Registration Successful", Toast.LENGTH_SHORT).show();
+                                        loginLauncher.launch(new Intent(this, LoginScreen.class));
+                                    });
+                        } else {
+                            Toast.makeText(this, "This phone number is already taken", Toast.LENGTH_SHORT).show();
+                        }
+                    });
         });
 
-
+        findViewById(R.id.gotoLogin).setOnClickListener(v -> {
+            loginLauncher.launch(new Intent(this, LoginScreen.class));
+        });
     }
 }

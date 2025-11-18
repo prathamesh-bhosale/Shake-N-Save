@@ -1,108 +1,68 @@
 package com.example.safetyalert;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import com.google.android.gms.tasks.Tasks;
-
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
-
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.ArrayList;
 import java.util.List;
 
-
 public class ContactList extends AppCompatActivity {
 
     private RecyclerView recyclerView;
-    ContactAdapter adapter; // Create Object of the Adapter class
-    FirebaseFirestore firebaseFirestore;
-    ArrayList<Contact> l=new ArrayList<>();
+    private ProgressBar progressBar;
+    private ContactAdapter adapter;
+    private FirebaseFirestore firebaseFirestore;
+    private ArrayList<Contact> contactList = new ArrayList<>();
 
-    String userphonenumber = "";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_contact_list);
+
         recyclerView = findViewById(R.id.recycler1);
+        progressBar = findViewById(R.id.progress_bar);
 
         SharedPreferences sh = getSharedPreferences("MySharedPref", MODE_PRIVATE);
-        userphonenumber = sh.getString("phone", "");
+        String userphonenumber = sh.getString("phone", "");
 
-        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
-        layoutManager.setOrientation(LinearLayoutManager.VERTICAL);
-        recyclerView.setLayoutManager(layoutManager);
-
-        firebaseFirestore= FirebaseFirestore.getInstance();
-
-
-
-
-
-
-        readData(new MyCallback() {
-
-
-            @Override
-            public void onCallback() {
-
-                show();
-            }
-        });
-    }
-
-    public interface MyCallback {
-        void onCallback();
-    }
-
-    public void show() {
-
-
-        ContactAdapter adapter=new ContactAdapter(l);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        adapter = new ContactAdapter(contactList);
         recyclerView.setAdapter(adapter);
-        adapter.notifyDataSetChanged();
 
+        firebaseFirestore = FirebaseFirestore.getInstance();
+
+        loadContacts(userphonenumber);
     }
 
-
-
-    public void readData(final MyCallback myCallback) {
-        firebaseFirestore.collection("users").document(userphonenumber).collection("contacts").get().addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
-            @Override
-            public void onComplete(@NonNull Task<QuerySnapshot> task) {
-
-                        if(task.getResult().size()>0){
-                            int i=task.getResult().size();
-
-                            for (DocumentSnapshot document : task.getResult()) {
-                                Contact c=document.toObject(Contact.class);
-//                                l.add(new Contact(document.get("name").toString(),document.get("phonenumber").toString()));
-                                l.add(c);
-                                if(i==1)myCallback.onCallback();
-                                i--;
-
-
-                            }
-
+    private void loadContacts(String userphonenumber) {
+        progressBar.setVisibility(View.VISIBLE);
+        firebaseFirestore.collection("users").document(userphonenumber).collection("contacts").get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    progressBar.setVisibility(View.GONE);
+                    if (!queryDocumentSnapshots.isEmpty()) {
+                        for (DocumentSnapshot document : queryDocumentSnapshots.getDocuments()) {
+                            Contact contact = document.toObject(Contact.class);
+                            contactList.add(contact);
                         }
-
-
-
-            }
-        });
+                        adapter.notifyDataSetChanged();
+                    } else {
+                        Toast.makeText(ContactList.this, "No contacts found", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(ContactList.this, "Failed to load contacts", Toast.LENGTH_SHORT).show();
+                });
     }
-
-
-    }
+}

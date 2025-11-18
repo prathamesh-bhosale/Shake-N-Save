@@ -1,124 +1,150 @@
 package com.example.safetyalert;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
+import android.content.ContentValues;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageCapture;
+import androidx.camera.core.ImageCaptureException;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
-import com.androidhiddencamera.CameraConfig;
-import com.androidhiddencamera.CameraError;
-import com.androidhiddencamera.HiddenCameraActivity;
-import com.androidhiddencamera.HiddenCameraUtils;
-import com.androidhiddencamera.config.CameraFacing;
-import com.androidhiddencamera.config.CameraImageFormat;
-import com.androidhiddencamera.config.CameraResolution;
-import com.androidhiddencamera.config.CameraRotation;
+import com.google.common.util.concurrent.ListenableFuture;
 
-import java.io.File;
+import java.util.concurrent.ExecutionException;
 
-public class DemoCamActivity extends HiddenCameraActivity {
-    private static final int REQ_CODE_CAMERA_PERMISSION = 1253;
+public class DemoCamActivity extends AppCompatActivity {
+    private static final int REQUEST_CODE_PERMISSIONS = 10;
+    private static final String[] REQUIRED_PERMISSIONS = new String[]{
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO
+    };
 
-    private CameraConfig mCameraConfig;
+    private PreviewView previewView;
+    private Button captureButton;
+    private ProgressBar progressBar;
+    private ImageView imagePreview;
+
+    private ImageCapture imageCapture;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_demo_cam);
 
-        mCameraConfig = new CameraConfig()
-                .getBuilder(this)
-                .setCameraFacing(CameraFacing.FRONT_FACING_CAMERA)
-                .setCameraResolution(CameraResolution.HIGH_RESOLUTION)
-                .setImageFormat(CameraImageFormat.FORMAT_JPEG)
-                .setImageRotation(CameraRotation.ROTATION_270)
+        previewView = findViewById(R.id.preview_view);
+        captureButton = findViewById(R.id.capture_btn);
+        progressBar = findViewById(R.id.progress_bar);
+        imagePreview = findViewById(R.id.image_preview);
+
+        if (allPermissionsGranted()) {
+            startCamera();
+        } else {
+            ActivityCompat.requestPermissions(
+                    this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
+        }
+
+        captureButton.setOnClickListener(v -> takePhoto());
+    }
+
+    private void takePhoto() {
+        if (imageCapture == null) {
+            return;
+        }
+
+        progressBar.setVisibility(View.VISIBLE);
+
+        long timestamp = System.currentTimeMillis();
+        ContentValues contentValues = new ContentValues();
+        contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, "IMG_" + timestamp);
+        contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/CameraX-Image");
+        }
+
+        ImageCapture.OutputFileOptions outputOptions = new ImageCapture.OutputFileOptions.Builder(
+                getContentResolver(),
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                contentValues)
                 .build();
 
+        imageCapture.takePicture(
+                outputOptions,
+                ContextCompat.getMainExecutor(this),
+                new ImageCapture.OnImageSavedCallback() {
+                    @Override
+                    public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
+                        progressBar.setVisibility(View.GONE);
+                        Toast.makeText(DemoCamActivity.this, "Photo saved", Toast.LENGTH_SHORT).show();
+                        imagePreview.setVisibility(View.VISIBLE);
+                        imagePreview.setImageURI(outputFileResults.getSavedUri());
+                    }
 
-        //Check for the camera permission for the runtime
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                == PackageManager.PERMISSION_GRANTED) {
-
-            //Start camera preview
-            startCamera(mCameraConfig);
-        } else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA},
-                    REQ_CODE_CAMERA_PERMISSION);
-        }
-
-        //Take a picture
-        findViewById(R.id.capture_btn).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                //Take picture using the camera without preview.
-                takePicture();
-            }
-        });
+                    @Override
+                    public void onError(@NonNull ImageCaptureException exception) {
+                        progressBar.setVisibility(View.GONE);
+                        Toast.makeText(DemoCamActivity.this, "Failed to save photo", Toast.LENGTH_SHORT).show();
+                    }
+                });
     }
 
-    @SuppressLint("MissingPermission")
-    @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        if (requestCode == REQ_CODE_CAMERA_PERMISSION) {
+    private void startCamera() {
+        ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
 
-            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startCamera(mCameraConfig);
+        cameraProviderFuture.addListener(() -> {
+            try {
+                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
+
+                Preview preview = new Preview.Builder().build();
+                preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+                imageCapture = new ImageCapture.Builder().build();
+
+                CameraSelector cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA;
+
+                cameraProvider.unbindAll();
+                cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture);
+
+            } catch (ExecutionException | InterruptedException e) {
+                // Handle any errors (including cancellation)
+                Toast.makeText(this, "Error starting camera", Toast.LENGTH_SHORT).show();
+            }
+        }, ContextCompat.getMainExecutor(this));
+    }
+
+    private boolean allPermissionsGranted() {
+        for (String permission : REQUIRED_PERMISSIONS) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CODE_PERMISSIONS) {
+            if (allPermissionsGranted()) {
+                startCamera();
             } else {
-                Toast.makeText(this, "Error Permission Denied", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Permissions not granted by the user.", Toast.LENGTH_SHORT).show();
+                finish();
             }
-        } else {
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        }
-    }
-
-    @Override
-    public void onImageCapture(@NonNull File imageFile) {
-
-        // Convert file to bitmap.
-        // Do something.
-        BitmapFactory.Options options = new BitmapFactory.Options();
-        options.inPreferredConfig = Bitmap.Config.RGB_565;
-        Bitmap bitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath(), options);
-
-        //Display the image to the image view
-        ((ImageView) findViewById(R.id.cam_prev)).setImageBitmap(bitmap);
-    }
-
-    @Override
-    public void onCameraError(@CameraError.CameraErrorCodes int errorCode) {
-        switch (errorCode) {
-            case CameraError.ERROR_CAMERA_OPEN_FAILED:
-                //Camera open failed. Probably because another application
-                //is using the camera
-                Toast.makeText(this, "Cannot Open Camera", Toast.LENGTH_LONG).show();
-                break;
-            case CameraError.ERROR_IMAGE_WRITE_FAILED:
-                //Image write failed. Please check if you have provided WRITE_EXTERNAL_STORAGE permission
-                Toast.makeText(this, "Camera cannot write", Toast.LENGTH_LONG).show();
-                break;
-            case CameraError.ERROR_CAMERA_PERMISSION_NOT_AVAILABLE:
-                //camera permission is not available
-                //Ask for the camera permission before initializing it.
-                Toast.makeText(this, "Error cannot get permission", Toast.LENGTH_LONG).show();
-                break;
-            case CameraError.ERROR_DOES_NOT_HAVE_OVERDRAW_PERMISSION:
-                //Display information dialog to the user with steps to grant "Draw over other app"
-                //permission for the app.
-                HiddenCameraUtils.openDrawOverPermissionSetting(this);
-                break;
-            case CameraError.ERROR_DOES_NOT_HAVE_FRONT_CAMERA:
-                Toast.makeText(this, "Error not having camera", Toast.LENGTH_LONG).show();
-                break;
         }
     }
 }
